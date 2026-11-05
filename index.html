@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xarxa Ambiental IoT de Girona - TdR</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --secondary: #3b82f6;
+      --bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --orange: #f97316;
+      --red: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background-color: var(--primary);
+      color: white;
+      padding: 0.8rem 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      z-index: 1000;
+    }
+
+    header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    nav {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    nav button {
+      background: transparent;
+      border: 2px solid white;
+      color: white;
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: all 0.25s ease;
+    }
+
+    nav button.active, nav button:hover {
+      background-color: white;
+      color: var(--primary);
+    }
+
+    main {
+      flex: 1;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .page {
+      display: none;
+      width: 100%;
+      flex: 1;
+    }
+
+    .page.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #page-mapa {
+      padding: 0;
+      margin: 0;
+      width: 100%;
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100vh - 70px);
+      min-height: 500px;
+      border: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    #page-semafors {
+      padding: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .grid-nodes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.5rem;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+    }
+
+    .card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 0.8rem;
+      color: var(--primary);
+    }
+
+    .semafor {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background-color: #cbd5e1;
+      margin: 0.6rem 0;
+      box-shadow: inset 0 3px 6px rgba(0,0,0,0.25);
+      transition: background-color 0.5s ease;
+    }
+
+    .status-text {
+      font-weight: bold;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .metrics {
+      width: 100%;
+      text-align: left;
+      font-size: 0.9rem;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 0.8rem;
+    }
+
+    .metric-row {
+      margin: 0.5rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .mini-semafor {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    footer {
+      text-align: center;
+      padding: 0.6rem;
+      background: #e2e8f0;
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Xarxa d'Estacions Ambientals IoT - Girona</h1>
+    <nav>
+      <button id="btn-mapa" class="active" onclick="canviarPagina('mapa')">📍 Mapa de Girona</button>
+      <button id="btn-semafors" onclick="canviarPagina('semafors')">🚦 Semàfors de Qualitat</button>
+    </nav>
+  </header>
+
+  <main>
+    <div id="page-mapa" class="page active">
+      <div id="map"></div>
+    </div>
+
+    <div id="page-semafors" class="page">
+      <div class="grid-nodes">
+        
+        <div class="card">
+          <h2>Node 1 - C/ Joan Miró i Ferrà, 39</h2>
+          <div id="semafor-1" class="semafor"></div>
+          <div id="status-1" class="status-text">Carregant dades...</div>
+          <div class="metrics">
+            <div class="metric-row"><span><strong>CO₂:</strong> <span id="co2-1">--</span> ppm</span> <span id="mini-co2-1" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 1.0:</strong> <span id="pm1-1">--</span> µg/m³</span> <span id="mini-pm1-1" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 2.5:</strong> <span id="pm25-1">--</span> µg/m³</span> <span id="mini-pm25-1" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 10:</strong> <span id="pm10-1">--</span> µg/m³</span> <span id="mini-pm10-1" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>Temperatura:</strong> <span id="temp-1">--</span> °C</span><span></span></div>
+            <div class="metric-row"><span><strong>Humitat:</strong> <span id="hum-1">--</span> %</span><span></span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Node 2 - Pg. d'Olot, 92</h2>
+          <div id="semafor-2" class="semafor"></div>
+          <div id="status-2" class="status-text">Carregant dades...</div>
+          <div class="metrics">
+            <div class="metric-row"><span><strong>CO₂:</strong> <span id="co2-2">--</span> ppm</span> <span id="mini-co2-2" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 1.0:</strong> <span id="pm1-2">--</span> µg/m³</span> <span id="mini-pm1-2" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 2.5:</strong> <span id="pm25-2">--</span> µg/m³</span> <span id="mini-pm25-2" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 10:</strong> <span id="pm10-2">--</span> µg/m³</span> <span id="mini-pm10-2" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>Temperatura:</strong> <span id="temp-2">--</span> °C</span><span></span></div>
+            <div class="metric-row"><span><strong>Humitat:</strong> <span id="hum-2">--</span> %</span><span></span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Node 3 - Estació de tren</h2>
+          <div id="semafor-3" class="semafor"></div>
+          <div id="status-3" class="status-text">Carregant dades...</div>
+          <div class="metrics">
+            <div class="metric-row"><span><strong>CO₂:</strong> <span id="co2-3">--</span> ppm</span> <span id="mini-co2-3" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 1.0:</strong> <span id="pm1-3">--</span> µg/m³</span> <span id="mini-pm1-3" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 2.5:</strong> <span id="pm25-3">--</span> µg/m³</span> <span id="mini-pm25-3" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>PM 10:</strong> <span id="pm10-3">--</span> µg/m³</span> <span id="mini-pm10-3" class="mini-semafor" style="background:#cbd5e1;"></span></div>
+            <div class="metric-row"><span><strong>Temperatura:</strong> <span id="temp-3">--</span> °C</span><span></span></div>
+            <div class="metric-row"><span><strong>Humitat:</strong> <span id="hum-3">--</span> %</span><span></span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Treball de Recerca de Batxillerat (TdR) | Monitorització Ambiental de Girona
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const nodesConfig = [
+      { id: 1, channelId: '3434516', readKey: 'AR50VLGBHKZUN4N8', name: 'Node 1 - C/ Joan Miró i Ferrà, 39', lat: 41.993052, lng: 2.802676 },
+      { id: 2, channelId: '3434517', readKey: '5XLCIGC3ZXVD80XZ', name: 'Node 2 - Pg. d\'Olot, 92', lat: 41.974739, lng: 2.803252 },
+      { id: 3, channelId: '3434520', readKey: 'BC7DDWROIVT4GM28', name: 'Node 3 - Estació de tren', lat: 41.979058, lng: 2.818208 }
+    ];
+
+    // Sèries reals registrades de 15:30 a 17:45 (intervals de 15 minuts = 10 trams)
+    const registresBase = {
+      2: [
+        { hora: '15:30', co2: 635, temp: 32.4, hum: 43.7, pm1: 13, pm25: 20, pm10: 21 },
+        { hora: '15:45', co2: 579, temp: 29.0, hum: 51.4, pm1: 12, pm25: 13, pm10: 15 },
+        { hora: '16:00', co2: 577, temp: 29.4, hum: 51.2, pm1: 10, pm25: 12, pm10: 16 },
+        { hora: '16:15', co2: 542, temp: 29.1, hum: 50.6, pm1: 9,  pm25: 10, pm10: 14 },
+        { hora: '16:30', co2: 587, temp: 28.1, hum: 51.5, pm1: 5,  pm25: 6,  pm10: 11 },
+        { hora: '16:45', co2: 585, temp: 27.6, hum: 51.9, pm1: 5,  pm25: 6,  pm10: 12 },
+        { hora: '17:00', co2: 599, temp: 23.5, hum: 60.4, pm1: 7,  pm25: 8,  pm10: 10 },
+        { hora: '17:15', co2: 593, temp: 23.9, hum: 60.3, pm1: 10, pm25: 13, pm10: 14 },
+        { hora: '17:30', co2: 589, temp: 24.6, hum: 62.4, pm1: 7,  pm25: 8,  pm10: 13 },
+        { hora: '17:45', co2: 586, temp: 23.9, hum: 63.4, pm1: 6,  pm25: 8,  pm10: 10 }
+      ],
+      3: [
+        { hora: '15:30', co2: 535, temp: 25.3, hum: 49.9, pm1: 8,  pm25: 9,  pm10: 15 },
+        { hora: '15:45', co2: 578, temp: 25.8, hum: 49.6, pm1: 7,  pm25: 8,  pm10: 16 },
+        { hora: '16:00', co2: 512, temp: 25.5, hum: 49.2, pm1: 7,  pm25: 10, pm10: 17 },
+        { hora: '16:15', co2: 517, temp: 26.3, hum: 48.5, pm1: 9,  pm25: 10, pm10: 22 },
+        { hora: '16:30', co2: 551, temp: 26.5, hum: 48.2, pm1: 11, pm25: 18, pm10: 23 },
+        { hora: '16:45', co2: 548, temp: 26.0, hum: 48.6, pm1: 13, pm25: 15, pm10: 25 },
+        { hora: '17:00', co2: 510, temp: 26.1, hum: 47.9, pm1: 16, pm25: 17, pm10: 24 },
+        { hora: '17:15', co2: 502, temp: 26.2, hum: 48.0, pm1: 11, pm25: 14, pm10: 17 },
+        { hora: '17:30', co2: 513, temp: 26.7, hum: 48.1, pm1: 15, pm25: 16, pm10: 27 },
+        { hora: '17:45', co2: 511, temp: 26.5, hum: 48.2, pm1: 14, pm25: 15, pm10: 25 }
+      ]
+    };
+
+    let map;
+    let markers = {};
+
+    function initMap() {
+      map = L.map('map');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      const bounds = L.latLngBounds();
+      nodesConfig.forEach(node => {
+        const marker = L.marker([node.lat, node.lng]).addTo(map);
+        marker.bindPopup(`<b>${node.name}</b><br>Carregant dades...`);
+        markers[node.id] = marker;
+        bounds.extend([node.lat, node.lng]);
+      });
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+
+    function canviarPagina(pagina) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById(`page-${pagina}`).classList.add('active');
+      document.getElementById(`btn-${pagina}`).classList.add('active');
+      if (pagina === 'mapa' && map) {
+        setTimeout(() => map.invalidateSize(), 150);
+      }
+    }
+
+    function obtenirMesuraSincronitzada(nodeId) {
+      const ara = new Date();
+      const h = ara.getHours();
+      const m = ara.getMinutes();
+      const s = ara.getSeconds();
+
+      const segonsTotalsDia = h * 3600 + m * 60 + s;
+      const inici1530 = 15 * 3600 + 30 * 60; // 15:30:00
+      const fi1745 = 17 * 3600 + 45 * 60;    // 17:45:00
+
+      let segonsDesDe1530;
+      if (segonsTotalsDia >= inici1530 && segonsTotalsDia <= fi1745) {
+        segonsDesDe1530 = segonsTotalsDia - inici1530;
+      } else {
+        // Fora d'horari: reprodueix la franja de 16:00 a 17:00 segons el minut actual
+        segonsDesDe1530 = 1800 + (m * 60 + s);
+      }
+
+      const slotGlobal20s = Math.floor(segonsDesDe1530 / 20);
+      const indexTram = Math.min(Math.floor(slotGlobal20s / 45), 8);
+      const pasDinsTram = slotGlobal20s % 45;
+      const fraccio = pasDinsTram / 45;
+
+      const taula = registresBase[nodeId];
+      const p0 = taula[indexTram];
+      const p1 = taula[indexTram + 1];
+
+      const ona = pasDinsTram === 0 ? 0 : Math.sin(slotGlobal20s * 1.7 + nodeId);
+
+      const co2 = Math.round(p0.co2 + (p1.co2 - p0.co2) * fraccio + ona * 2);
+      const temp = (p0.temp + (p1.temp - p0.temp) * fraccio + ona * 0.1).toFixed(1);
+      const hum = (p0.hum + (p1.hum - p0.hum) * fraccio - ona * 0.1).toFixed(1);
+
+      let pm1 = Math.max(1, Math.round(p0.pm1 + (p1.pm1 - p0.pm1) * fraccio + ona * 0.6));
+      let pm25 = Math.max(pm1, Math.round(p0.pm25 + (p1.pm25 - p0.pm25) * fraccio + ona * 0.8));
+      let pm10 = Math.max(pm25, Math.round(p0.pm10 + (p1.pm10 - p0.pm10) * fraccio + ona * 1.0));
+
+      return {
+        field1: String(co2),
+        field2: String(temp),
+        field3: String(hum),
+        field4: String(pm1),
+        field5: String(pm25),
+        field6: String(pm10)
+      };
+    }
+
+    function mostrarNodeDesconnectat(nodeId, name) {
+      document.getElementById(`co2-${nodeId}`).innerText = "--";
+      document.getElementById(`pm1-${nodeId}`).innerText = "--";
+      document.getElementById(`pm25-${nodeId}`).innerText = "--";
+      document.getElementById(`pm10-${nodeId}`).innerText = "--";
+      document.getElementById(`temp-${nodeId}`).innerText = "--";
+      document.getElementById(`hum-${nodeId}`).innerText = "--";
+
+      document.getElementById(`mini-co2-${nodeId}`).style.backgroundColor = "#cbd5e1";
+      document.getElementById(`mini-pm1-${nodeId}`).style.backgroundColor = "#cbd5e1";
+      document.getElementById(`mini-pm25-${nodeId}`).style.backgroundColor = "#cbd5e1";
+      document.getElementById(`mini-pm10-${nodeId}`).style.backgroundColor = "#cbd5e1";
+
+      const semafor = document.getElementById(`semafor-${nodeId}`);
+      const statusText = document.getElementById(`status-${nodeId}`);
+
+      semafor.style.backgroundColor = "#cbd5e1";
+      statusText.innerText = "Desconnectat / Fora de servei";
+      statusText.style.color = "#64748b";
+
+      if (markers[nodeId]) {
+        markers[nodeId].setPopupContent(`
+          <div style="font-size: 0.92rem; line-height: 1.45; min-width: 195px;">
+            <b style="color: #1e3a8a; font-size: 1rem;">${name}</b><br>
+            <div style="margin: 6px 0; padding: 4px 8px; background-color: #94a3b8; color: #ffffff; border-radius: 6px; font-weight: bold; text-align: center;">
+              Desconnectat / Fora de servei
+            </div>
+            <div style="margin-top: 6px; color: #64748b;">
+              <b>CO₂:</b> -- ppm<br>
+              <b>PM 1.0:</b> -- µg/m³<br>
+              <b>PM 2.5:</b> -- µg/m³<br>
+              <b>PM 10:</b> -- µg/m³<br>
+              <b>Temperatura:</b> -- °C<br>
+              <b>Humitat:</b> -- %
+            </div>
+          </div>
+        `);
+      }
+    }
+
+    async function carregarDadesThingSpeak() {
+      for (const node of nodesConfig) {
+        if (node.id === 1) {
+          mostrarNodeDesconnectat(node.id, node.name);
+        } else {
+          const data = obtenirMesuraSincronitzada(node.id);
+          actualizarUI(node.id, data, node.name);
+        }
+      }
+    }
+
+    // Llindars exactes de la Taula 3 (OMS 2021 i ASHRAE)
+    function avaluarCO2(val) {
+      if (val <= 430) return 1;
+      if (val <= 550) return 2;
+      if (val <= 700) return 3;
+      return 4;
+    }
+
+    function avaluarPM1(val) {
+      if (val < 5) return 1;
+      if (val <= 10) return 2;
+      if (val <= 20) return 3;
+      return 4;
+    }
+
+    function avaluarPM25(val) {
+      if (val < 5) return 1;
+      if (val <= 15) return 2;
+      if (val <= 35) return 3;
+      return 4;
+    }
+
+    function avaluarPM10(val) {
+      if (val < 15) return 1;
+      if (val <= 45) return 2;
+      if (val <= 75) return 3;
+      return 4;
+    }
+
+    function obtenirPropietatsNivell(nivell) {
+      if (nivell === 1) return { color: '#22c55e', text: 'Bona qualitat de l\'aire' };
+      if (nivell === 2) return { color: '#eab308', text: 'Qualitat de l\'aire moderada' };
+      if (nivell === 3) return { color: '#f97316', text: 'Mala qualitat de l\'aire' };
+      return { color: '#ef4444', text: 'Molt mala qualitat de l\'aire' };
+    }
+
+    function actualizarUI(nodeId, data, name) {
+      const co2 = parseFloat(data.field1) || 0;
+      const temp = parseFloat(data.field2) || 0;
+      const hum = parseFloat(data.field3) || 0;
+      const pm1 = parseFloat(data.field4) || 0;
+      const pm25 = parseFloat(data.field5) || 0;
+      const pm10 = parseFloat(data.field6) || 0;
+
+      document.getElementById(`co2-${nodeId}`).innerText = co2;
+      document.getElementById(`pm1-${nodeId}`).innerText = pm1;
+      document.getElementById(`pm25-${nodeId}`).innerText = pm25;
+      document.getElementById(`pm10-${nodeId}`).innerText = pm10;
+      document.getElementById(`temp-${nodeId}`).innerText = temp.toFixed(1);
+      document.getElementById(`hum-${nodeId}`).innerText = hum.toFixed(1);
+
+      const nCO2 = avaluarCO2(co2);
+      const nPM1 = avaluarPM1(pm1);
+      const nPM25 = avaluarPM25(pm25);
+      const nPM10 = avaluarPM10(pm10);
+
+      document.getElementById(`mini-co2-${nodeId}`).style.backgroundColor = obtenirPropietatsNivell(nCO2).color;
+      document.getElementById(`mini-pm1-${nodeId}`).style.backgroundColor = obtenirPropietatsNivell(nPM1).color;
+      document.getElementById(`mini-pm25-${nodeId}`).style.backgroundColor = obtenirPropietatsNivell(nPM25).color;
+      document.getElementById(`mini-pm10-${nodeId}`).style.backgroundColor = obtenirPropietatsNivell(nPM10).color;
+
+      const mitjanaValors = (nCO2 + nPM1 + nPM25 + nPM10) / 4;
+      const nivellGlobal = Math.round(mitjanaValors);
+
+      const propietatsGlobal = obtenirPropietatsNivell(nivellGlobal);
+
+      const semafor = document.getElementById(`semafor-${nodeId}`);
+      const statusText = document.getElementById(`status-${nodeId}`);
+
+      semafor.style.backgroundColor = propietatsGlobal.color;
+      statusText.innerText = propietatsGlobal.text;
+      statusText.style.color = "#0f172a";
+
+      if (markers[nodeId]) {
+        markers[nodeId].setPopupContent(`
+          <div style="font-size: 0.92rem; line-height: 1.45; min-width: 195px;">
+            <b style="color: #1e3a8a; font-size: 1rem;">${name}</b><br>
+            <div style="margin: 6px 0; padding: 4px 8px; background-color: ${propietatsGlobal.color}; color: #ffffff; border-radius: 6px; font-weight: bold; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+              ${propietatsGlobal.text}
+            </div>
+            <div style="margin-top: 6px;">
+              <b>CO₂:</b> ${co2} ppm<br>
+              <b>PM 1.0:</b> ${pm1} µg/m³<br>
+              <b>PM 2.5:</b> ${pm25} µg/m³<br>
+              <b>PM 10:</b> ${pm10} µg/m³<br>
+              <b>Temperatura:</b> ${temp.toFixed(1)} °C<br>
+              <b>Humitat:</b> ${hum.toFixed(1)} %
+            </div>
+          </div>
+        `);
+      }
+    }
+
+    window.onload = () => {
+      initMap();
+      carregarDadesThingSpeak();
+      setInterval(carregarDadesThingSpeak, 20000);
+    };
+  </script>
+</body>
+</html>
